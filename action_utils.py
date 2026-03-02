@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from torch.autograd import Variable
 
 def parse_action_args(args):
     if args.num_actions[0] > 0:

@@ -32,8 +32,8 @@ class MultiProcessWorker(mp.Process):
             elif task == 'send_grads':
                 grads = []
                 for p in self.trainer.params:
-                    if p._grad is not None:
-                        grads.append(p._grad.data)
+                    if p.grad is not None:
+                        grads.append(p.grad.data)
 
                 self.comm.send(grads)
 
@@ -62,8 +62,8 @@ class MultiProcessTrainer(object):
         if self.grads is None:
             self.grads = []
             for p in self.trainer.params:
-                if p._grad is not None:
-                    self.grads.append(p._grad.data)
+                if p.grad is not None:
+                    self.grads.append(p.grad.data)
 
         if self.worker_grads is None:
             self.worker_grads = []

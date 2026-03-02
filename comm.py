@@ -107,7 +107,7 @@ class CommNetMLP(nn.Module):
             num_agents_alive = n
 
         agent_mask = agent_mask.view(1, 1, n)
-        agent_mask = agent_mask.expand(batch_size, n, n).unsqueeze(-1)
+        agent_mask = agent_mask.expand(batch_size, n, n).unsqueeze(-1).clone()
 
         return num_agents_alive, agent_mask
 
@@ -188,7 +188,7 @@ class CommNetMLP(nn.Module):
             mask = mask.expand(comm.shape[0], n, n)
             mask = mask.unsqueeze(-1)
 
-            mask = mask.expand_as(comm)
+            mask = mask.expand_as(comm).clone()
             comm = comm * mask
 
             if hasattr(self.args, 'comm_mode') and self.args.comm_mode == 'avg' \

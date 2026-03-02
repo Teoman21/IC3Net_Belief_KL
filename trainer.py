@@ -1,5 +1,5 @@
 from collections import namedtuple
-from inspect import getargspec
+from inspect import getfullargspec
 import numpy as np
 import torch
 from torch import optim
@@ -25,7 +25,7 @@ class Trainer(object):
 
     def get_episode(self, epoch):
         episode = []
-        reset_args = getargspec(self.env.reset).args
+        reset_args = getfullargspec(self.env.reset).args
         if 'epoch' in reset_args:
             state = self.env.reset(epoch)
         else:
@@ -249,8 +249,8 @@ class Trainer(object):
         s = self.compute_grad(batch)
         merge_stat(s, stat)
         for p in self.params:
-            if p._grad is not None:
-                p._grad.data /= stat['num_steps']
+            if p.grad is not None:
+                p.grad.data /= stat['num_steps']
         self.optimizer.step()
 
         return stat

@@ -1,0 +1,165 @@
+# IC3Net_Belief_KL — Detailed Repository Summary
+
+## What Is This?
+
+A **PyTorch implementation of IC3Net** (*Individualized Controlled Continuous Communication Net*) from the ICLR 2019 paper [*"Learning when to Communicate at Scale in Multiagent Cooperative and Competitive Tasks"*](https://arxiv.org/abs/1812.09755). The repo name suffix `_Belief_KL` suggests it is a fork intended for extensions involving **belief modeling** and/or **KL-divergence**-based communication regularization, though those extensions have not yet been added to the codebase.
+
+---
+
+## High-Level Architecture
+
+```mermaid
+graph TD
+    A["main.py<br/>(entry point, argparse, training loop)"] --> B["data.py<br/>(env factory)"]
+    A --> C["CommNetMLP / RNN / MLP<br/>(policy networks)"]
+    A --> D["Trainer<br/>(episode rollout + policy-gradient)"]
+    A --> E["MultiProcessTrainer<br/>(parallel rollout workers)"]
+    B --> F["GymWrapper<br/>(env_wrappers.py)"]
+    F --> G["ic3net-envs<br/>(Predator-Prey, Traffic Junction)"]
+    F --> H["gym-starcraft<br/>(StarCraft micro-management)"]
+    D --> C
+    E --> D
+```
+
+---
+
+## Supported Communication Baselines
+
+| Flag(s) | Model | Description |
+|---|---|---|
+| `--ic3net` | **IC3Net** | CommNet + learned **hard attention** gating (binary talk/silent) + individual rewards |
+| `--commnet` | **CommNet** | Continuous communication, mean-pooled messages |
+| `--mean_ratio 0` | **IRIC** | Individual-Reward IC (no cooperative mean blending) |
+| *(none of above)* | **IC** | Independent Controller, no communication |
+| `--random` | **Random** | Random policy baseline |
+
+---
+
+## File-by-File Breakdown
+
+### Core Training Pipeline
+
+#### [main.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/main.py) — Entry Point (296 lines)
+- Defines **all CLI arguments** (~110 flags): env name, number of agents, hidden size, learning rate, discount factor, communication settings, etc.
+- Selects the policy network ([CommNetMLP](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/comm.py#8-254), [RNN](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#59-97), [MLP](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#8-35), or [Random](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#37-57)).
+- Sets up [Trainer](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#14-263) or [MultiProcessTrainer](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/multi_processing.py#41-105) depending on `--nprocesses`.
+- Runs the main **epoch loop**: calls [train_batch()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#245-257), logs rewards/losses/success to a [log](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#37-41) dict, optionally plots via **Visdom**.
+- Handles save/load of model checkpoints (`.pt` files).
+
+#### [trainer.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py) — RL Training Logic (263 lines)
+- **[Trainer](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#14-263) class** with:
+  - **[get_episode(epoch)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#26-127)** — Rolls out a single episode: resets env, iterates up to `max_steps`, queries the policy net at each step, records `Transition` tuples [(state, action, action_out, value, masks, next_state, reward, misc)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#8-35).
+  - **[compute_grad(batch)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#128-226)** — Computes REINFORCE-style **policy gradient**:
+    - Calculates **cooperative returns** (global mean reward) and **non-cooperative returns** (individual reward), blended by `--mean_ratio`.
+    - Advantage = returns − value baseline.
+    - Policy loss = −advantage × log π(a|s).
+    - Value loss = MSE between predicted values and returns.
+    - Entropy regularization (coefficient `--entr`).
+  - **[run_batch(epoch)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#227-243)** — Collects episodes until `batch_size` transitions are accumulated.
+  - **[train_batch(epoch)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#245-257)** — Single-process training: run batch → zero grad → compute grad → normalize by num_steps → optimizer step (RMSprop, α=0.97).
+
+#### [multi_processing.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/multi_processing.py) — Parallel Workers (105 lines)
+- **[MultiProcessWorker](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/multi_processing.py#6-39)** — A `torch.multiprocessing.Process` that owns its own [Trainer](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#14-263) replica, receives tasks via `mp.Pipe` ([run_batch](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#227-243), `send_grads`, [quit](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/multi_processing.py#56-59)).
+- **[MultiProcessTrainer](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/multi_processing.py#41-105)** — Spawns `nprocesses − 1` workers; coordinates parallel episode collection, aggregates gradients, then calls `optimizer.step()` on the main process.
+
+---
+
+### Neural Network Models
+
+#### [models.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py) — Simple Baselines (98 lines)
+| Class | Description |
+|---|---|
+| [MLP](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#8-35) | 2-layer feedforward: `Linear(obs→hid)` → Tanh → residual `Linear(hid→hid)` + skip → action heads + value head. Supports continuous (Gaussian) and discrete actions. |
+| [Random](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#37-57) | Outputs random log-softmax actions and random values. |
+| [RNN](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#59-97) | Extends [MLP](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#8-35) by replacing the second linear layer with an **LSTMCell** (or plain RNN). Maintains hidden state across timesteps. |
+
+#### [comm.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/comm.py) — CommNet / IC3Net (255 lines)
+The **[CommNetMLP](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/comm.py#8-254)** class — the main contribution of the paper:
+
+1. **State Encoder**: maps observation → hidden representation via a linear layer.
+2. **Communication Loop** (runs `comm_passes` times):
+   - Each agent's hidden state is broadcast to all other agents.
+   - A **self-mask** prevents an agent from receiving its own message.
+   - An **alive mask** zeros out dead agents.
+   - If `--hard_attn` (IC3Net mode): a **gating action** (0 or 1) per agent controls whether it sends a message.
+   - Messages are summed (or averaged if `--comm_mode avg`) and passed through a learned linear transform `C_modules[i]`.
+   - The transformed communication is added to the encoded input (**skip connection**), then fed into `f_module` (LSTM cell or linear) to produce the next hidden state.
+3. **Output**: action log-probabilities (discrete) or Gaussian params (continuous), plus a value head.
+
+---
+
+### Environment Layer
+
+#### [data.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/data.py) — Environment Factory (37 lines)
+Creates and initializes environments by name (`levers`, `number_pairs`, `predator_prey`, `traffic_junction`, `starcraft`), wraps them in [GymWrapper](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#7-108).
+
+#### [env_wrappers.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py) — Gym Wrapper (108 lines)
+[GymWrapper](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#7-108) normalizes the interface for multi-agent envs:
+- Exposes [observation_dim](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#14-31), [num_actions](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#32-40), [dim_actions](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#41-51) properties.
+- [reset(epoch)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#56-65) / [step(action)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#73-81) — handles both Discrete and MultiDiscrete action spaces.
+- [_flatten_obs()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/env_wrappers.py#88-101) — flattens per-agent observations into a [(1, N, obs_dim)](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py#8-35) tensor.
+
+#### [ic3net-envs/](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/ic3net-envs/) — Custom Gym Environments
+An installable Python package (`python setup.py develop`) containing:
+- **[predator_prey_env.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/ic3net-envs/ic3net_envs/predator_prey_env.py)** (~12 KB) — Grid-world where `N` predators must capture prey. Configurable grid size (`--dim`), agent vision (`--vision`), and difficulty.
+- **[traffic_junction_env.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/ic3net-envs/ic3net_envs/traffic_junction_env.py)** (~22 KB) — Agents are cars navigating an intersection; must avoid collisions. Supports easy/medium/hard layouts with curriculum learning (`--add_rate_min/max`, `--curr_start/end`).
+- **[traffic_helper.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/ic3net-envs/ic3net_envs/traffic_helper.py)** (~7 KB) — Route computation helpers for traffic junction.
+
+#### [gym-starcraft/](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/gym-starcraft/) — StarCraft Micromanagement
+Optional Gym wrapper around TorchCraft for explore and combat tasks.
+
+---
+
+### Utilities
+
+#### [action_utils.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/action_utils.py) — Action Helpers (64 lines)
+- [parse_action_args()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/action_utils.py#5-25) — Sets up `continuous` flag and `naction_heads` from CLI args.
+- [select_action()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/action_utils.py#27-37) — Samples from Gaussian (continuous) or Categorical (discrete) distributions.
+- [translate_action()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/action_utils.py#38-64) — Converts network output to environment-compatible actions.
+
+#### [utils.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py) — General Utilities (140 lines)
+- [merge_stat()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#15-30) — Accumulates statistics across episodes.
+- Log-density functions for Gaussian and Multinomial distributions.
+- `get/set_flat_params`, [get_flat_grad](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#75-85) — Parameter/gradient flattening.
+- [Timer](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#86-99) context manager, [pca()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#100-105), [init_args_for_env()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#107-133), [display_models()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/utils.py#134-140).
+
+#### [plot_script.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/plot_script.py) — Plotting (130 lines)
+Parses training logs and generates matplotlib plots of **rewards**, **success rate**, and **steps taken** over epochs, with variance bands. Designed for comparing CommNet vs IC3Net vs baselines.
+
+---
+
+## Key Design Decisions & Concepts
+
+1. **Cooperative vs Individual Rewards**: The `--mean_ratio` flag blends cooperative (global mean) and individual returns. IC3Net uses `mean_ratio=0` (fully individual), while CommNet defaults to `mean_ratio=1` (fully cooperative).
+2. **Hard Attention Gating**: IC3Net's key innovation — each agent has an extra discrete action deciding whether to broadcast its hidden state. This is treated as an additional action head trained via REINFORCE.
+3. **Detach Gap**: Every `--detach_gap` steps, the hidden state is `.detach()`-ed to truncate BPTT and limit memory usage.
+4. **Curriculum Learning**: Traffic Junction uses `--curr_start/end` to gradually increase the car arrival rate during training.
+5. **Multi-Process Training**: Uses `torch.multiprocessing` with Pipes for data-parallel gradient aggregation across `nprocesses` workers.
+
+---
+
+## How to Run (Quick Reference)
+
+```bash
+# Install environments
+cd ic3net-envs && python setup.py develop && cd ..
+pip install -r requirements.txt
+
+# Example: IC3Net on Predator-Prey (easy)
+python main.py --env_name predator_prey --nagents 3 --nprocesses 16 \
+  --num_epochs 2000 --hid_size 128 --detach_gap 10 --lrate 0.001 \
+  --dim 5 --max_steps 20 --ic3net --vision 0 --recurrent
+```
+
+---
+
+## Repo Status & Extension Surface
+
+The codebase is a **clean fork of the original IC3Net reference implementation**. The `_Belief_KL` suffix in the repo name indicates planned extensions around:
+- **Belief modeling** (agents maintaining beliefs about others' states)
+- **KL-divergence** regularization on communication
+
+These extensions are **not yet implemented** — the code is currently identical to the base IC3Net. The natural extension points would be:
+- [comm.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/comm.py) → add belief networks and KL terms in the communication loop
+- [trainer.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py) → add KL loss to [compute_grad()](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/trainer.py#128-226)
+- [models.py](file:///Users/Teoman/Desktop/Classes/NU/Spring26/RL/project/IC3Net_Belief_KL/models.py) → add belief encoder/decoder modules

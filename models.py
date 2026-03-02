@@ -1,6 +1,4 @@
 import torch
-import torch.autograd as autograd
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -46,11 +44,11 @@ class Random(nn.Module):
 
         sizes = x.size()[:-1]
 
-        v = Variable(torch.rand(sizes + (1,)), requires_grad=True)
+        v = torch.rand(sizes + (1,)).requires_grad_(True)
         out = []
 
         for o in self.naction_heads:
-            var = Variable(torch.randn(sizes + (o, )), requires_grad=True)
+            var = torch.randn(sizes + (o, )).requires_grad_(True)
             out.append(F.log_softmax(var, dim=-1))
 
         return out, v
@@ -78,7 +76,7 @@ class RNN(MLP):
             ret = (next_hid.clone(), cell_state.clone())
             next_hid = next_hid.view(batch_size, self.nagents, self.hid_size)
         else:
-            next_hid = F.tanh(self.affine2(prev_hid) + encoded_x)
+            next_hid = torch.tanh(self.affine2(prev_hid) + encoded_x)
             ret = next_hid
 
         v = self.value_head(next_hid)

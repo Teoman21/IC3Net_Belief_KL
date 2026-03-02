@@ -5,7 +5,6 @@ import argparse
 
 import numpy as np
 import torch
-import visdom
 import data
 from models import *
 from comm import CommNetMLP
@@ -14,10 +13,9 @@ from action_utils import parse_action_args
 from trainer import Trainer
 from multi_processing import MultiProcessTrainer
 
-torch.utils.backcompat.broadcast_warning.enabled = True
-torch.utils.backcompat.keepdim_warning.enabled = True
 
-torch.set_default_tensor_type('torch.DoubleTensor')
+
+torch.set_default_dtype(torch.float64)
 
 parser = argparse.ArgumentParser(description='PyTorch RL trainer')
 # training
@@ -201,6 +199,7 @@ log['action_loss'] = LogField(list(), True, 'epoch', 'num_steps')
 log['entropy'] = LogField(list(), True, 'epoch', 'num_steps')
 
 if args.plot:
+    import visdom
     vis = visdom.Visdom(env=args.plot_env)
 
 def run(num_epochs):
@@ -265,7 +264,7 @@ def save(path):
     torch.save(d, path)
 
 def load(path):
-    d = torch.load(path)
+    d = torch.load(path, weights_only=False)
     # log.clear()
     policy_net.load_state_dict(d['policy_net'])
     log.update(d['log'])
