@@ -106,6 +106,14 @@ parser.add_argument('--advantages_per_action', default=False, action='store_true
 parser.add_argument('--share_weights', default=False, action='store_true',
                     help='Share weights for hops')
 
+# KL-divergence belief gate args
+parser.add_argument('--kl_gate', action='store_true', default=False,
+                    help='Replace IC3Net hard attention gate with KL divergence belief trigger')
+parser.add_argument('--belief_size', type=int, default=8,
+                    help='Number of latent belief categories K (softmax dim)')
+parser.add_argument('--kl_eps', type=float, default=0.1,
+                    help='KL divergence threshold epsilon to trigger communication')
+
 
 if __name__ == '__main__':
     init_args_for_env(parser)

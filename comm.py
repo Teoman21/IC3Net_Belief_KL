@@ -95,6 +95,14 @@ class CommNetMLP(nn.Module):
 
         self.value_head = nn.Linear(self.hid_size, 1)
 
+        # Belief head for KL-triggered communication
+        if getattr(args, 'kl_gate', False):
+            self.belief_head = nn.Sequential(
+                nn.Linear(args.hid_size, args.belief_size),
+                nn.Softmax(dim=-1)
+            )
+            self.prev_beliefs = None  # stores previous timestep beliefs
+
 
     def get_agent_mask(self, batch_size, info):
         n = self.nagents
@@ -176,6 +184,47 @@ class CommNetMLP(nn.Module):
 
         agent_mask_transpose = agent_mask.transpose(1, 2)
 
+        # KL-triggered gate: compute beliefs and override comm_action_mask
+        if getattr(self.args, 'kl_gate', False):
+            # hidden_state shape: (batch_size * nagents, hid_size)
+            # reshape to (batch_size, nagents, hid_size) for per-agent ops
+            h_agents = hidden_state.view(batch_size, n, self.hid_size)
+            # shape: (batch_size, nagents, belief_size)
+            beliefs = self.belief_head(h_agents)
+
+            if self.prev_beliefs is None:
+                # uniform distribution at start of episode
+                self.prev_beliefs = (torch.ones_like(beliefs) /
+                                     self.args.belief_size).detach()
+
+            # Compute pairwise KL: for each agent i, KL(prev_b_i || prev_b_j)
+            # prev_beliefs: (batch_size, nagents, belief_size)
+            eps_val = getattr(self.args, 'kl_eps', 0.1)
+            p = self.prev_beliefs  # (batch, n, K)
+
+            # p_i: (batch, n, 1, K), p_j: (batch, 1, n, K)
+            p_i = p.unsqueeze(2)  # (batch, n, 1, K)
+            p_j = p.unsqueeze(1)  # (batch, 1, n, K)
+
+            # KL(p_i || p_j) = sum(p_i * log(p_i/p_j))
+            kl = (p_i * (torch.log(p_i + 1e-8) -
+                         torch.log(p_j + 1e-8))).sum(dim=-1)
+            # kl shape: (batch, n, n) — kl[b,i,j] = KL(agent_i || agent_j)
+
+            # Gate: communicate if KL > threshold, shape (batch, n, n)
+            kl_mask = (kl > eps_val).double()
+            # Zero out self-communication (diagonal)
+            eye = torch.eye(n).unsqueeze(0).to(kl_mask.device)
+            kl_mask = kl_mask * (1 - eye)
+
+            # Override agent_mask with kl_mask
+            # agent_mask shape is (batch, n, n, 1) — match it
+            agent_mask = kl_mask.unsqueeze(-1)
+            agent_mask_transpose = agent_mask.transpose(1, 2)
+
+            # Update stored beliefs for next timestep
+            self.prev_beliefs = beliefs.detach()
+
         for i in range(self.comm_passes):
             # Choose current or prev depending on recurrent
             comm = hidden_state.view(batch_size, n, self.hid_size) if self.args.recurrent else hidden_state
@@ -251,4 +300,7 @@ class CommNetMLP(nn.Module):
         # dim 0 = num of layers * num of direction
         return tuple(( torch.zeros(batch_size * self.nagents, self.hid_size, requires_grad=True),
                        torch.zeros(batch_size * self.nagents, self.hid_size, requires_grad=True)))
+
+    def reset_beliefs(self):
+        self.prev_beliefs = None
 

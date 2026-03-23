@@ -40,6 +40,9 @@ class Trainer(object):
 
         prev_hid = torch.zeros(1, self.args.nagents, self.args.hid_size)
 
+        if getattr(self.args, 'kl_gate', False):
+            self.policy_net.reset_beliefs()
+
         for t in range(self.args.max_steps):
             misc = dict()
             if t == 0 and self.args.hard_attn and self.args.commnet:
