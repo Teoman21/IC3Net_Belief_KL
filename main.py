@@ -202,6 +202,7 @@ if __name__ == '__main__':
     log['steps_taken'] = LogField(list(), True, 'epoch', 'num_episodes')
     log['add_rate'] = LogField(list(), True, 'epoch', 'num_episodes')
     log['comm_action'] = LogField(list(), True, 'epoch', 'num_steps')
+    log['comm_rate'] = LogField(list(), True, 'epoch', 'num_episodes')
     log['enemy_comm'] = LogField(list(), True, 'epoch', 'num_steps')
     log['value_loss'] = LogField(list(), True, 'epoch', 'num_steps')
     log['action_loss'] = LogField(list(), True, 'epoch', 'num_steps')
@@ -248,6 +249,8 @@ if __name__ == '__main__':
                 print('Steps-taken: {:.2f}'.format(stat['steps_taken']))
             if 'comm_action' in stat.keys():
                 print('Comm-Action: {}'.format(stat['comm_action']))
+            if 'comm_rate' in stat.keys():
+                print('Comm-Rate: {:.4f}'.format(stat['comm_rate']))
             if 'enemy_comm' in stat.keys():
                 print('Enemy-Comm: {}'.format(stat['enemy_comm']))
 

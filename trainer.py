@@ -74,6 +74,13 @@ class Trainer(object):
                 info['comm_action'] = action[-1] if not self.args.comm_action_one else np.ones(self.args.nagents, dtype=int)
 
                 stat['comm_action'] = stat.get('comm_action', 0) + info['comm_action'][:self.args.nfriendly]
+                
+                # Log how many comm actions fired vs total possible this timestep
+                n_comm = info['comm_action'][:self.args.nfriendly].sum()
+                n_possible = self.args.nfriendly
+                stat['comm_count'] = stat.get('comm_count', 0) + n_comm
+                stat['comm_possible'] = stat.get('comm_possible', 0) + n_possible
+
                 if hasattr(self.args, 'enemy_comm') and self.args.enemy_comm:
                     stat['enemy_comm']  = stat.get('enemy_comm', 0)  + info['comm_action'][self.args.nfriendly:]
 
@@ -126,6 +133,13 @@ class Trainer(object):
 
         if hasattr(self.env, 'get_stat'):
             merge_stat(self.env.get_stat(), stat)
+
+        # Compute comm_rate for this episode
+        if stat.get('comm_possible', 0) > 0:
+            stat['comm_rate'] = stat['comm_count'] / stat['comm_possible']
+        else:
+            stat['comm_rate'] = 0.0
+
         return (episode, stat)
 
     def compute_grad(self, batch):
