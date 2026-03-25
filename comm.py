@@ -217,9 +217,9 @@ class CommNetMLP(nn.Module):
             eye = torch.eye(n).unsqueeze(0).to(kl_mask.device)
             kl_mask = kl_mask * (1 - eye)
 
-            # Override agent_mask with kl_mask
+            # FIXED: Multiply instead of replace — preserve alive-agent mask
             # agent_mask shape is (batch, n, n, 1) — match it
-            agent_mask = kl_mask.unsqueeze(-1)
+            agent_mask = agent_mask * kl_mask.unsqueeze(-1)
             agent_mask_transpose = agent_mask.transpose(1, 2)
 
             # Update stored beliefs for next timestep
