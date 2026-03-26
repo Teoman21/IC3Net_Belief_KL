@@ -188,7 +188,7 @@ class CommNetMLP(nn.Module):
         if getattr(self.args, 'kl_gate', False):
             # hidden_state shape: (batch_size * nagents, hid_size)
             # reshape to (batch_size, nagents, hid_size) for per-agent ops
-            h_agents = hidden_state.view(batch_size, n, self.hid_size)
+            h_agents = hidden_state.view(batch_size, n, self.hid_size).detach()
             # shape: (batch_size, nagents, belief_size)
             beliefs = self.belief_head(h_agents)
 
