@@ -213,6 +213,8 @@ if __name__ == '__main__':
         vis = visdom.Visdom(env=args.plot_env)
 
     def run(num_epochs):
+        import sys
+        sys.stdout.reconfigure(line_buffering=True)
         for ep in range(num_epochs):
             epoch_begin_time = time.time()
             stat = dict()
