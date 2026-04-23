@@ -105,3 +105,44 @@ class GymWrapper(object):
             return self.env.stat
         else:
             return dict()
+
+class MPEWrapper(object):
+    def __init__(self, env, args):
+        self.env = env
+        self.args = args
+        self.nagents = env.n
+
+    @property
+    def observation_dim(self):
+        return self.env.observation_space[0].shape[0]
+
+    @property
+    def num_actions(self):
+        return self.env.action_space[0].n
+
+    @property
+    def dim_actions(self):
+        return 1
+
+    def reset(self, epoch=None):
+        obs = self.env.reset()
+        return self._process_obs(obs)
+
+    def step(self, actions):
+        act = [int(a) for a in actions]
+        obs, rewards, dones, infos = self.env.step(act)
+        obs = self._process_obs(obs)
+        reward = np.mean(rewards)
+        done = all(dones)
+        return obs, reward, done, infos
+
+    def _process_obs(self, obs):
+        obs = np.stack(obs)
+        obs = obs.reshape(1, self.nagents, self.observation_dim)
+        return torch.from_numpy(obs).double()
+
+    def reward_terminal(self):
+        return np.zeros(1)
+
+    def get_stat(self):
+        return dict()

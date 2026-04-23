@@ -30,8 +30,20 @@ def init(env_name, args, final_init=True):
         env.multi_agent_init(args, final_init)
         env = GymWrapper(env)
 
+    elif env_name.startswith('simple_'):
+        return init_mpe(env_name, args, final_init)
     else:
         raise RuntimeError("wrong env name")
 
+    return env
+
+def init_mpe(env_name, args, final_init=True):
+    import multiagent.scenarios as scenarios
+    from multiagent.environment import MultiAgentEnv
+    scenario = scenarios.load(env_name + ".py").Scenario()
+    world = scenario.make_world()
+    env = MultiAgentEnv(world, scenario.reset_world, scenario.reward,
+                        scenario.observation)
+    env = MPEWrapper(env, args)
     return env
 
