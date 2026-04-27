@@ -129,6 +129,7 @@ class MPEWrapper(object):
         return self._process_obs(obs)
 
     def step(self, actions):
+        actions = np.array(actions).flatten()
         act = [int(a) for a in actions]
         obs, rewards, dones, infos = self.env.step(act)
         obs = self._process_obs(obs)
@@ -137,7 +138,7 @@ class MPEWrapper(object):
         return obs, reward, done, infos
 
     def _process_obs(self, obs):
-        obs = np.stack(obs)
+        obs = np.stack([np.array(o).flatten() for o in obs])
         obs = obs.reshape(1, self.nagents, self.observation_dim)
         return torch.from_numpy(obs).double()
 
