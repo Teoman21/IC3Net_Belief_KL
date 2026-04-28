@@ -148,7 +148,7 @@ if __name__ == '__main__':
     args.num_inputs = num_inputs
 
     # Hard attention
-    if args.hard_attn and args.commnet:
+    if args.hard_attn and args.commnet and not args.env_name.startswith('simple_'):
         # add comm_action as last dim in actions
         args.num_actions = [*args.num_actions, 2]
         args.dim_actions = env.dim_actions + 1
