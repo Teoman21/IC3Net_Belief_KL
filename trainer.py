@@ -46,7 +46,9 @@ class Trainer(object):
         for t in range(self.args.max_steps):
             misc = dict()
             if t == 0 and self.args.hard_attn and self.args.commnet:
-                info['comm_action'] = np.zeros(self.args.nagents, dtype=int)
+                info['comm_action'] = np.ones(self.args.nagents, dtype=int) \
+                    if self.args.env_name.startswith('simple_') \
+                    else np.zeros(self.args.nagents, dtype=int)
 
             # recurrence over time
             if self.args.recurrent:
@@ -71,7 +73,10 @@ class Trainer(object):
 
             # store comm_action in info for next step
             if self.args.hard_attn and self.args.commnet:
-                info['comm_action'] = action[-1] if not self.args.comm_action_one else np.ones(self.args.nagents, dtype=int)
+                if self.args.env_name.startswith('simple_'):
+                    info['comm_action'] = np.ones(self.args.nagents, dtype=int)
+                else:
+                    info['comm_action'] = action[-1] if not self.args.comm_action_one else np.ones(self.args.nagents, dtype=int)
 
                 stat['comm_action'] = stat.get('comm_action', 0) + info['comm_action'][:self.args.nfriendly]
                 
