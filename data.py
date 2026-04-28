@@ -45,5 +45,9 @@ def init_mpe(env_name, args, final_init=True):
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward,
                         scenario.observation)
     env = MPEWrapper(env, args)
+    args.num_actions = [env.num_actions]
+    args.dim_actions = 1
+    args.naction_heads = [env.num_actions]
+    args.nfriendly = args.nagents
     return env
 

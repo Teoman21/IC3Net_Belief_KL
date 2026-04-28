@@ -129,8 +129,6 @@ class MPEWrapper(object):
         return self._process_obs(obs)
 
     def step(self, actions):
-        # actions is a list of numpy scalars or ints
-        # MPE requires one-hot vectors
         act = []
         for a in actions:
             one_hot = np.zeros(self.num_actions)
