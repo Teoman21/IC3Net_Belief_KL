@@ -129,11 +129,16 @@ class MPEWrapper(object):
         return self._process_obs(obs)
 
     def step(self, actions):
-        actions = np.array(actions).flatten()
-        act = [int(a) for a in actions]
+        # actions is a list of numpy scalars or ints
+        # MPE requires one-hot vectors
+        act = []
+        for a in actions:
+            one_hot = np.zeros(self.num_actions)
+            one_hot[int(np.array(a).flatten()[0])] = 1.0
+            act.append(one_hot)
         obs, rewards, dones, infos = self.env.step(act)
         obs = self._process_obs(obs)
-        reward = np.mean(rewards)
+        reward = np.array(rewards)
         done = all(dones)
         return obs, reward, done, infos
 
@@ -143,7 +148,7 @@ class MPEWrapper(object):
         return torch.from_numpy(obs).double()
 
     def reward_terminal(self):
-        return np.zeros(1)
+        return np.zeros(self.nagents)
 
     def get_stat(self):
         return dict()
