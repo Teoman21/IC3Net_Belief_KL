@@ -129,10 +129,12 @@ class MPEWrapper(object):
         return self._process_obs(obs)
 
     def step(self, actions):
+        # actions arrives as (1, nagents, dim_actions) — flatten to (nagents,)
+        flat = np.array(actions).flatten()[:self.nagents]
         act = []
-        for a in actions:
+        for a in flat:
             one_hot = np.zeros(self.num_actions)
-            one_hot[int(np.array(a).flatten()[0])] = 1.0
+            one_hot[int(a)] = 1.0
             act.append(one_hot)
         obs, rewards, dones, infos = self.env.step(act)
         obs = self._process_obs(obs)
